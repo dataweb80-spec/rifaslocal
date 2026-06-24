@@ -26,6 +26,7 @@ function CrearRifaForm() {
   const [error, setError] = useState('')
   const [rifaCreada, setRifaCreada] = useState<{ id: string; slug: string } | null>(null)
   const [pagoAvisado, setPagoAvisado] = useState(false)
+  const [comprobante, setComprobante] = useState('')
 
   const [form, setForm] = useState({
     titulo: '',
@@ -50,30 +51,31 @@ function CrearRifaForm() {
     ? +form.precio_numero * +form.cantidad_numeros * 0.90
     : 0
 
-  async function handleActivarPlan() {
-    if (!rifaCreada) return
+  async function handleEnviarComprobante() {
+    if (!rifaCreada || !comprobante) return
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/rifas/activar-plan', {
+      // Guardar comprobante en la rifa
+      await fetch('/api/rifas/guardar-comprobante', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rifaId: rifaCreada.id }),
+        body: JSON.stringify({ rifaId: rifaCreada.id, comprobante_url: comprobante }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Error al activar')
 
-      // Avisar al admin de RifaLocal por WhatsApp si hay número configurado
+      // Avisar al admin por WhatsApp con link al comprobante y link al panel
       const adminPhone = process.env.NEXT_PUBLIC_PLATFORM_PHONE
       if (adminPhone) {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://rifaslocal.vercel.app'
         const msg = encodeURIComponent(
-          `💰 *NUEVO PLAN PAGADO — RifaLocal*\n\n` +
+          `💰 *NUEVO PLAN — VERIFICAR PAGO*\n\n` +
           `🏪 *${form.nombre_comercio}*\n` +
           `🎁 ${form.titulo}\n` +
           `🔢 Plan: ${form.plan_numeros} números\n` +
           `💵 Monto: $${form.plan_precio.toLocaleString('es-AR')}\n` +
           `📱 WA organizador: +54${form.tel_organizador.replace(/\D/g, '')}\n\n` +
-          `✅ Ya pagó por alias *${PLATFORM_ALIAS}*. Verificar en MP.`
+          `🧾 Comprobante: ${comprobante}\n\n` +
+          `👉 Activar desde el panel:\n${baseUrl}/admin/rifas`
         )
         const telLimpio = adminPhone.replace(/\D/g, '')
         const waAdmin = telLimpio.startsWith('54') ? telLimpio : `54${telLimpio}`
@@ -401,40 +403,54 @@ function CrearRifaForm() {
 
               {/* Botones */}
               {!pagoAvisado ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <button
                     onClick={() => window.open(`https://link.mercadopago.com.ar/${PLATFORM_ALIAS}`, '_blank')}
                     className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition">
                     <svg viewBox="0 0 40 40" className="w-7 h-7 fill-white"><path d="M20 0C9 0 0 9 0 20s9 20 20 20 20-9 20-20S31 0 20 0zm9.5 17.5c-.5 3-3 5.5-6 6.5l-1.5.5v3.5H19V24l-1.5-.5C14 22.5 11.5 20 11 17H9c.5 4 3.5 7 7.5 8.5V29h7v-3.5c4-1.5 7-4.5 7.5-8.5h-1.5z"/></svg>
                     Abrir MercadoPago
                   </button>
+
                   <div className="relative flex items-center gap-3">
                     <div className="flex-1 border-t border-gray-200" />
-                    <span className="text-xs text-gray-400 whitespace-nowrap">Una vez que transferiste</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">Una vez que pagaste</span>
                     <div className="flex-1 border-t border-gray-200" />
                   </div>
-                  <button
-                    disabled={loading}
-                    onClick={handleActivarPlan}
-                    className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
-                    {loading ? 'Activando...' : '✅ Ya pagué — Activar mi rifa'}
-                  </button>
+
+                  <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 space-y-3">
+                    <p className="font-semibold text-sm text-yellow-800">📸 Subí el comprobante de la transferencia</p>
+                    <p className="text-xs text-yellow-700">Sacá captura de pantalla del pago en MercadoPago y subila acá. Nosotros lo cotejamos y activamos tu rifa.</p>
+                    <UploadImagen actual={comprobante} onUpload={url => setComprobante(url)} />
+                  </div>
+
+                  {comprobante && (
+                    <button
+                      disabled={loading}
+                      onClick={handleEnviarComprobante}
+                      className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
+                      {loading ? 'Enviando...' : '📨 Enviar comprobante — Esperá la activación'}
+                    </button>
+                  )}
+
                   {error && <p className="text-red-500 text-sm bg-red-50 rounded-lg p-3">{error}</p>}
                 </div>
               ) : (
                 <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center space-y-3">
-                  <p className="text-3xl">🚀</p>
-                  <p className="text-xl font-bold text-green-700">¡Rifa activada!</p>
-                  <p className="text-sm text-gray-600">Tu sorteo ya está publicado y listo para compartir.</p>
-                  <a href={`/rifa/${rifaCreada.slug}?nueva=1&gestionar=${rifaCreada.id}`}
+                  <p className="text-3xl">📨</p>
+                  <p className="text-xl font-bold text-green-700">¡Comprobante enviado!</p>
+                  <p className="text-sm text-gray-600">Estamos verificando tu pago. En minutos activamos tu rifa y te avisamos por WhatsApp.</p>
+                  {comprobante && (
+                    <img src={comprobante} alt="Comprobante" className="w-full max-w-xs mx-auto rounded-xl border shadow-sm" />
+                  )}
+                  <a href={`/rifa/${rifaCreada.slug}`}
                     className="block bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-dark transition">
-                    Ver mi rifa y panel de gestión →
+                    Ver mi rifa (en espera) →
                   </a>
                 </div>
               )}
 
               <p className="text-xs text-center text-gray-400">
-                ¿Problemas con el pago? Escribinos por WhatsApp y lo activamos manualmente.
+                ¿Problemas? Escribinos por WhatsApp y lo resolvemos.
               </p>
             </div>
           )}
