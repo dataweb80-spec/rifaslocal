@@ -6,7 +6,7 @@ import type { Metadata } from 'next'
 
 interface Props {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ nueva?: string; plan?: string }>
+  searchParams: Promise<{ nueva?: string; plan?: string; gestionar?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RifaPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { nueva, plan } = await searchParams
+  const { nueva, plan, gestionar } = await searchParams
   const supabase = await createClient()
 
   const { data: rifa } = await supabase
@@ -73,7 +73,22 @@ export default async function RifaPage({ params, searchParams }: Props) {
         </span>
       </nav>
 
-      {nueva && (
+      {nueva && gestionar && (
+        <div className="bg-green-600 text-white px-4 py-4 space-y-2">
+          <p className="font-bold text-center">🎉 ¡Tu rifa está activa! Compartí el link para que la gente compre números.</p>
+          <div className="bg-white/20 rounded-xl p-3 flex flex-col sm:flex-row items-center gap-3 max-w-2xl mx-auto">
+            <div className="flex-1 text-sm">
+              <p className="font-bold">🔑 Guardá tu link de gestión:</p>
+              <p className="text-xs opacity-80 mt-0.5">Desde ahí confirmás pagos y gestionás la rifa</p>
+            </div>
+            <a href={`/gestionar/${gestionar}`}
+              className="bg-white text-green-700 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-50 transition whitespace-nowrap">
+              Ir al panel →
+            </a>
+          </div>
+        </div>
+      )}
+      {nueva && !gestionar && (
         <div className="bg-green-500 text-white text-center py-3 px-4">
           <p className="font-bold">🎉 ¡Tu rifa está activa! Compartí el link para que la gente compre números.</p>
         </div>

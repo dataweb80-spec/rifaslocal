@@ -66,7 +66,7 @@ function CrearRifaForm() {
       if (tipo === 'comercio' && data.init_point) {
         window.location.href = data.init_point
       } else {
-        router.push(`/rifa/${data.slug}?nueva=1`)
+        router.push(`/rifa/${data.slug}?nueva=1&gestionar=${data.id}`)
       }
     } catch (e: any) {
       setError(e.message)

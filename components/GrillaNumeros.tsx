@@ -28,12 +28,14 @@ function formatNumero(n: number, total: number): string {
 }
 
 type Step = 'grilla' | 'form' | 'pago'
+type MetodoPago = 'mp' | 'efectivo'
 
 export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tipo, titulo, imagen_url, nombre_comercio, logo_url, mp_alias, tel_organizador }: Props) {
   const [seleccionados, setSeleccionados] = useState<number[]>([])
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
   const [step, setStep] = useState<Step>('grilla')
+  const [metodoPago, setMetodoPago] = useState<MetodoPago>('mp')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [enviado, setEnviado] = useState(false)
@@ -125,11 +127,15 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
     window.open(`https://link.mercadopago.com.ar/${mp_alias}`, '_blank')
   }
 
-  function avisarOrganizador() {
+  function avisarOrganizador(metodo: MetodoPago) {
     if (!tel_organizador) return
     const nums = seleccionados.sort((a, b) => a - b)
     const numFormateados = nums.map(n => formatNumero(n, total)).join(', ')
     const comercio = nombre_comercio || 'RifaLocal'
+
+    const lineaPago = metodo === 'efectivo'
+      ? `💵 Forma de pago: *EFECTIVO EN EL LOCAL*\n⚠️ Pendiente de cobro. Confirmá el pago y el número.`
+      : `✅ El comprador ya realizó el pago al alias *${mp_alias}*.\nVerificá el pago en tu MercadoPago y confirmá el número.`
 
     const msg = encodeURIComponent(
       `💰 *NUEVA COMPRA — ${comercio}*\n\n` +
@@ -138,8 +144,7 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
       `👤 Comprador: *${nombre}*\n` +
       `📱 WhatsApp: *+54${telefono.replace(/\D/g, '')}*\n` +
       `💰 Monto: *$${montoTotal.toLocaleString('es-AR')}*\n\n` +
-      `✅ El comprador ya realizó el pago al alias *${mp_alias}*.\n` +
-      `Verificá el pago en tu MercadoPago y confirmá el número.`
+      lineaPago
     )
 
     const telLimpio = tel_organizador.replace(/\D/g, '')
@@ -148,10 +153,10 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
     setEnviado(true)
 
     // Enviar ticket al comprador también
-    setTimeout(() => enviarTicketPagaWA(), 1500)
+    setTimeout(() => enviarTicketPagaWA(metodo), 1500)
   }
 
-  function enviarTicketPagaWA() {
+  function enviarTicketPagaWA(metodo: MetodoPago = 'mp') {
     const baseUrl = window.location.origin
     const nums = seleccionados.sort((a, b) => a - b)
     const numFormateados = nums.map(n => formatNumero(n, total)).join(', ')
@@ -166,7 +171,9 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
       `🎁 *${titulo}*\n\n` +
       `👤 Titular: *${nombre}*\n` +
       `🔢 Número${nums.length > 1 ? 's' : ''}: *${numFormateados}*\n` +
-      `💰 Monto pagado: *$${montoTotal.toLocaleString('es-AR')}*\n\n` +
+      (metodo === 'efectivo'
+        ? `💵 Pago: *EFECTIVO EN EL LOCAL* (pendiente confirmación)\n\n`
+        : `💰 Monto pagado: *$${montoTotal.toLocaleString('es-AR')}*\n\n`) +
       `━━━━━━━━━━━━━━━━━━━━━━\n` +
       `🎰 *¿Cómo se sortea?*\n` +
       `Cuando se vendan todos los números, el ganador se determina con el *primer número de la Lotería Nacional nocturna* de ese día.\n\n` +
@@ -333,81 +340,123 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
         </div>
       )}
 
-      {/* PANTALLA DE PAGO MP */}
+      {/* PANTALLA DE PAGO */}
       {step === 'pago' && (
         <div className="space-y-5">
           <div className="text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">💳</div>
-            <h2 className="text-xl font-bold">¡Casi listo! Realizá el pago</h2>
-            <p className="text-gray-500 text-sm mt-1">Tu número está reservado. Completá el pago para confirmarlo.</p>
+            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">💳</div>
+            <h2 className="text-xl font-bold">¡Casi listo! ¿Cómo pagás?</h2>
+            <p className="text-gray-500 text-sm mt-1">Tu número está reservado. Elegí cómo querés pagar.</p>
           </div>
 
-          {/* Datos de pago */}
-          <div className="bg-gray-50 rounded-2xl p-5 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-500 text-sm">Números</span>
-              <div className="flex gap-1">
-                {seleccionados.sort((a, b) => a - b).map(n => (
-                  <span key={n} className="bg-accent text-white text-sm font-bold px-2 py-0.5 rounded">
-                    {formatNumero(n, total)}
-                  </span>
-                ))}
-              </div>
+          {/* Resumen */}
+          <div className="bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
+            <div className="flex gap-1 flex-wrap">
+              {seleccionados.sort((a, b) => a - b).map(n => (
+                <span key={n} className="bg-accent text-white text-sm font-bold px-2 py-0.5 rounded">
+                  {formatNumero(n, total)}
+                </span>
+              ))}
             </div>
-            <div className="flex justify-between items-center border-t pt-3">
-              <span className="text-gray-500 text-sm">Monto total</span>
-              <span className="text-2xl font-black text-accent">${montoTotal.toLocaleString('es-AR')}</span>
-            </div>
+            <span className="text-2xl font-black text-accent ml-3">${montoTotal.toLocaleString('es-AR')}</span>
           </div>
 
-          {/* Alias MP */}
-          <div className="bg-blue-50 rounded-2xl p-5 text-center border-2 border-blue-200">
-            <p className="text-sm text-blue-600 font-medium mb-2">Transferí o pagá con MercadoPago al alias:</p>
-            <div className="bg-white rounded-xl px-6 py-3 inline-block border border-blue-200">
-              <p className="text-2xl font-black text-blue-700 tracking-wide">{mp_alias}</p>
-            </div>
-            <p className="text-xs text-blue-500 mt-2">Buscá el alias en MercadoPago → Pagar → Alias</p>
-          </div>
-
-          {/* Botones */}
-          <div className="space-y-3">
-            <button onClick={abrirMercadoPago}
-              className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition">
-              <svg viewBox="0 0 40 40" className="w-7 h-7 fill-white"><path d="M20 0C9 0 0 9 0 20s9 20 20 20 20-9 20-20S31 0 20 0zm9.5 17.5c-.5 3-3 5.5-6 6.5l-1.5.5v3.5H19V24l-1.5-.5C14 22.5 11.5 20 11 17H9c.5 4 3.5 7 7.5 8.5V29h7v-3.5c4-1.5 7-4.5 7.5-8.5h-1.5z"/></svg>
-              Abrir MercadoPago
+          {/* Selector método de pago */}
+          <div className="grid grid-cols-2 gap-3">
+            <button onClick={() => setMetodoPago('mp')}
+              className={`p-4 rounded-2xl border-2 text-center transition ${metodoPago === 'mp' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}>
+              <div className="text-2xl mb-1">📱</div>
+              <p className="font-bold text-sm">MercadoPago</p>
+              <p className="text-xs text-gray-500 mt-0.5">Transferencia / alias</p>
             </button>
-
-            <div className="relative flex items-center gap-3">
-              <div className="flex-1 border-t border-gray-200" />
-              <span className="text-xs text-gray-400 whitespace-nowrap">Una vez que pagaste</span>
-              <div className="flex-1 border-t border-gray-200" />
-            </div>
-
-            {!enviado ? (
-              <button onClick={avisarOrganizador}
-                className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                  <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.854L.057 23.888a.5.5 0 0 0 .609.61l6.098-1.459A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.95 0-3.784-.528-5.363-1.449l-.386-.224-3.97.95.984-3.882-.247-.399A9.945 9.945 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
-                </svg>
-                Ya pagué — Avisar al organizador por WhatsApp
-              </button>
-            ) : (
-              <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-center space-y-3">
-                <p className="text-green-700 font-bold">✅ ¡Aviso enviado al organizador!</p>
-                <p className="text-sm text-gray-500">También te enviamos tu ticket de participación por WhatsApp.</p>
-                <a href={`/rifa/${slug}`} className="block bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-dark transition">
-                  Ver la rifa →
-                </a>
-              </div>
-            )}
+            <button onClick={() => setMetodoPago('efectivo')}
+              className={`p-4 rounded-2xl border-2 text-center transition ${metodoPago === 'efectivo' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'}`}>
+              <div className="text-2xl mb-1">💵</div>
+              <p className="font-bold text-sm">Efectivo</p>
+              <p className="text-xs text-gray-500 mt-0.5">En el local</p>
+            </button>
           </div>
 
-          <p className="text-xs text-center text-gray-400">
-            ⚠️ El organizador confirmará tu número una vez verificado el pago en su MercadoPago.
-          </p>
+          {/* Panel MercadoPago */}
+          {metodoPago === 'mp' && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 rounded-2xl p-5 text-center border-2 border-blue-200">
+                <p className="text-sm text-blue-600 font-medium mb-2">Transferí o pagá con MercadoPago al alias:</p>
+                <div className="bg-white rounded-xl px-6 py-3 inline-block border border-blue-200">
+                  <p className="text-2xl font-black text-blue-700 tracking-wide">{mp_alias}</p>
+                </div>
+                <p className="text-xs text-blue-500 mt-2">MercadoPago → Pagar → Alias</p>
+              </div>
+              <button onClick={abrirMercadoPago}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition">
+                <svg viewBox="0 0 40 40" className="w-7 h-7 fill-white"><path d="M20 0C9 0 0 9 0 20s9 20 20 20 20-9 20-20S31 0 20 0zm9.5 17.5c-.5 3-3 5.5-6 6.5l-1.5.5v3.5H19V24l-1.5-.5C14 22.5 11.5 20 11 17H9c.5 4 3.5 7 7.5 8.5V29h7v-3.5c4-1.5 7-4.5 7.5-8.5h-1.5z"/></svg>
+                Abrir MercadoPago
+              </button>
+              <div className="relative flex items-center gap-3">
+                <div className="flex-1 border-t border-gray-200" />
+                <span className="text-xs text-gray-400 whitespace-nowrap">Una vez que transferiste</span>
+                <div className="flex-1 border-t border-gray-200" />
+              </div>
+              {!enviado ? (
+                <button onClick={() => avisarOrganizador('mp')}
+                  className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
+                  <WaIcon />
+                  Ya pagué — Avisar al organizador
+                </button>
+              ) : <ConfirmadoBox slug={slug} />}
+            </div>
+          )}
+
+          {/* Panel Efectivo */}
+          {metodoPago === 'efectivo' && (
+            <div className="space-y-4">
+              <div className="bg-green-50 rounded-2xl p-5 border-2 border-green-200">
+                <p className="font-bold text-green-800 mb-2">💵 Cómo funciona el pago en efectivo:</p>
+                <ol className="text-sm text-green-700 space-y-2">
+                  <li>1. Avisá al organizador por WhatsApp que querés pagar en efectivo</li>
+                  <li>2. Acercate al local y abonás <strong>${montoTotal.toLocaleString('es-AR')}</strong></li>
+                  <li>3. El organizador confirma tu número cuando recibe el pago</li>
+                </ol>
+              </div>
+              {!enviado ? (
+                <button onClick={() => avisarOrganizador('efectivo')}
+                  className="w-full bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
+                  <WaIcon />
+                  Avisar que voy a pagar en efectivo
+                </button>
+              ) : <ConfirmadoBox slug={slug} efectivo />}
+              <p className="text-xs text-center text-gray-400">
+                ⚠️ Tu número queda reservado hasta que el organizador confirme el cobro en persona.
+              </p>
+            </div>
+          )}
         </div>
       )}
+    </div>
+  )
+}
+
+function WaIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 shrink-0">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.122 1.532 5.854L.057 23.888a.5.5 0 0 0 .609.61l6.098-1.459A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.95 0-3.784-.528-5.363-1.449l-.386-.224-3.97.95.984-3.882-.247-.399A9.945 9.945 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+    </svg>
+  )
+}
+
+function ConfirmadoBox({ slug, efectivo }: { slug: string; efectivo?: boolean }) {
+  return (
+    <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-center space-y-3">
+      <p className="text-green-700 font-bold">✅ ¡Aviso enviado al organizador!</p>
+      <p className="text-sm text-gray-500">
+        {efectivo
+          ? 'También te enviamos tu ticket provisorio por WhatsApp. Se confirma cuando pagues en el local.'
+          : 'También te enviamos tu ticket de participación por WhatsApp.'}
+      </p>
+      <a href={`/rifa/${slug}`} className="block bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-dark transition">
+        Ver la rifa →
+      </a>
     </div>
   )
 }
