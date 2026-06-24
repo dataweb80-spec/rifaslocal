@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import MercadoPagoConfig, { Preference } from 'mercadopago'
 
 function getSupabase() {
   return createClient(
@@ -23,7 +22,11 @@ function generarSlug(titulo: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { tipo = 'paga', titulo, descripcion, precio_numero, cantidad_numeros, imagen_url, precio_plan, terminos_ok, nombre_comercio, logo_url, mp_alias, tel_organizador } = body
+    const {
+      tipo = 'paga', titulo, descripcion, precio_numero, cantidad_numeros,
+      imagen_url, precio_plan, terminos_ok, nombre_comercio, logo_url,
+      mp_alias, tel_organizador,
+    } = body
 
     if (!titulo?.trim()) return NextResponse.json({ error: 'El título es obligatorio' }, { status: 400 })
     if (!terminos_ok) return NextResponse.json({ error: 'Debés aceptar los términos' }, { status: 400 })
@@ -36,9 +39,6 @@ export async function POST(req: NextRequest) {
 
     const slug = generarSlug(titulo)
     const supabase = getSupabase()
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL!
-
-    const estadoInicial = tipo === 'comercio' ? 'borrador' : 'activa'
 
     const { data: rifa, error: errRifa } = await supabase
       .from('rifas')
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         mp_alias: mp_alias?.trim() || null,
         tel_organizador: tel_organizador?.trim() || null,
         slug,
-        estado: estadoInicial,
+        estado: tipo === 'comercio' ? 'borrador' : 'activa',
         terminos_ok: true,
         tipo,
         sorteo_metodo: 'loteria',
@@ -64,40 +64,18 @@ export async function POST(req: NextRequest) {
 
     if (errRifa) throw new Error(errRifa.message)
 
-    // Rifa paga: activar y generar números directamente
+    // Rifa paga: generar números de inmediato
     if (tipo === 'paga') {
       await supabase.rpc('generar_numeros_rifa', {
         p_rifa_id: rifa.id,
         p_cantidad: rifa.cantidad_numeros,
       })
-      return NextResponse.json({ slug: rifa.slug, id: rifa.id })
     }
 
-    // Comercio: cobrar plan por MP (va a cuenta RifaLocal)
-    const mp = new MercadoPagoConfig({ accessToken: process.env.MP_ACCESS_TOKEN! })
-    const preference = new Preference(mp)
+    // Comercio: queda en borrador hasta que se confirme el pago del plan
+    // El pago se hace por alias (danielmfaggi) y se activa vía /api/rifas/activar-plan
 
-    const pref = await preference.create({
-      body: {
-        items: [{
-          id: rifa.id,
-          title: `Plan RifaLocal — ${nombre_comercio || titulo} (${cantidad_numeros} números)`,
-          quantity: 1,
-          unit_price: +precio_plan,
-          currency_id: 'ARS',
-        }],
-        back_urls: {
-          success: `${baseUrl}/rifa/${rifa.slug}?nueva=1&plan=ok`,
-          failure: `${baseUrl}/crear?error=pago`,
-          pending: `${baseUrl}/rifa/${rifa.slug}?plan=pendiente`,
-        },
-        auto_return: 'approved',
-        notification_url: `${baseUrl}/api/mp/webhook-plan`,
-        metadata: { rifa_id: rifa.id, tipo: 'plan_comercio' },
-      },
-    })
-
-    return NextResponse.json({ slug: rifa.slug, id: rifa.id, init_point: pref.init_point })
+    return NextResponse.json({ slug: rifa.slug, id: rifa.id })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }

@@ -13,6 +13,8 @@ const PLANES_COMERCIO = [
   { numeros: 999, precio: 120000 },
 ]
 
+const PLATFORM_ALIAS = process.env.NEXT_PUBLIC_PLATFORM_ALIAS ?? 'danielmfaggi'
+
 function CrearRifaForm() {
   const router = useRouter()
   const params = useSearchParams()
@@ -22,6 +24,8 @@ function CrearRifaForm() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [rifaCreada, setRifaCreada] = useState<{ id: string; slug: string } | null>(null)
+  const [pagoAvisado, setPagoAvisado] = useState(false)
 
   const [form, setForm] = useState({
     titulo: '',
@@ -46,6 +50,44 @@ function CrearRifaForm() {
     ? +form.precio_numero * +form.cantidad_numeros * 0.90
     : 0
 
+  async function handleActivarPlan() {
+    if (!rifaCreada) return
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/rifas/activar-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rifaId: rifaCreada.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error al activar')
+
+      // Avisar al admin de RifaLocal por WhatsApp si hay número configurado
+      const adminPhone = process.env.NEXT_PUBLIC_PLATFORM_PHONE
+      if (adminPhone) {
+        const msg = encodeURIComponent(
+          `💰 *NUEVO PLAN PAGADO — RifaLocal*\n\n` +
+          `🏪 *${form.nombre_comercio}*\n` +
+          `🎁 ${form.titulo}\n` +
+          `🔢 Plan: ${form.plan_numeros} números\n` +
+          `💵 Monto: $${form.plan_precio.toLocaleString('es-AR')}\n` +
+          `📱 WA organizador: +54${form.tel_organizador.replace(/\D/g, '')}\n\n` +
+          `✅ Ya pagó por alias *${PLATFORM_ALIAS}*. Verificar en MP.`
+        )
+        const telLimpio = adminPhone.replace(/\D/g, '')
+        const waAdmin = telLimpio.startsWith('54') ? telLimpio : `54${telLimpio}`
+        window.open(`https://wa.me/${waAdmin}?text=${msg}`, '_blank')
+      }
+
+      setPagoAvisado(true)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleSubmit() {
     if (!form.terminos_ok) { setError('Debés aceptar los términos'); return }
     setLoading(true)
@@ -63,8 +105,10 @@ function CrearRifaForm() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al crear')
 
-      if (tipo === 'comercio' && data.init_point) {
-        window.location.href = data.init_point
+      if (tipo === 'comercio') {
+        // Guardar datos para el paso 4 (pago del plan)
+        setRifaCreada({ id: data.id, slug: data.slug })
+        setStep(4)
       } else {
         router.push(`/rifa/${data.slug}?nueva=1&gestionar=${data.id}`)
       }
@@ -93,11 +137,13 @@ function CrearRifaForm() {
           </button>
         </div>
 
-        <div className="flex gap-2 mb-6">
-          {[1, 2, 3].map(s => (
-            <div key={s} className={`flex-1 h-2 rounded-full transition-all ${s <= step ? (tipo === 'paga' ? 'bg-accent' : 'bg-primary') : 'bg-gray-200'}`} />
-          ))}
-        </div>
+        {step < 4 && (
+          <div className="flex gap-2 mb-6">
+            {[1, 2, 3].map(s => (
+              <div key={s} className={`flex-1 h-2 rounded-full transition-all ${s <= step ? (tipo === 'paga' ? 'bg-accent' : 'bg-primary') : 'bg-gray-200'}`} />
+            ))}
+          </div>
+        )}
 
         <div className="bg-white rounded-2xl p-6 shadow-sm">
 
@@ -316,6 +362,83 @@ function CrearRifaForm() {
               </div>
             </div>
           )}
+          {/* PASO 4 COMERCIO: Pago del plan a RifaLocal */}
+          {step === 4 && rifaCreada && (
+            <div className="space-y-5">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">🎉</div>
+                <h2 className="text-xl font-bold">¡Tu rifa está lista!</h2>
+                <p className="text-gray-500 text-sm mt-1">Solo falta pagar el plan para activarla.</p>
+              </div>
+
+              {/* Resumen */}
+              <div className="bg-gray-50 rounded-2xl p-4 space-y-2 text-sm">
+                <div className="flex items-center gap-3 pb-3 border-b">
+                  {form.logo_url
+                    ? <img src={form.logo_url} alt="logo" className="w-10 h-10 rounded-xl object-cover border" />
+                    : <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center font-bold text-white">{form.nombre_comercio[0]?.toUpperCase()}</div>
+                  }
+                  <div>
+                    <p className="font-bold">{form.nombre_comercio}</p>
+                    <p className="text-xs text-gray-500">{form.titulo} · {form.plan_numeros} números</p>
+                  </div>
+                </div>
+                <div className="flex justify-between font-bold text-primary">
+                  <span>Plan a pagar</span>
+                  <span>${form.plan_precio.toLocaleString('es-AR')}</span>
+                </div>
+              </div>
+
+              {/* Alias de pago */}
+              <div className="bg-blue-50 rounded-2xl p-5 text-center border-2 border-blue-200">
+                <p className="text-sm text-blue-600 font-medium mb-2">Pagá el plan por MercadoPago al alias:</p>
+                <div className="bg-white rounded-xl px-6 py-3 inline-block border border-blue-200 mb-2">
+                  <p className="text-2xl font-black text-blue-700 tracking-wide">{PLATFORM_ALIAS}</p>
+                </div>
+                <p className="text-xs text-blue-500">Monto exacto: <strong>${form.plan_precio.toLocaleString('es-AR')}</strong></p>
+                <p className="text-xs text-blue-400 mt-1">MercadoPago → Pagar → Alias</p>
+              </div>
+
+              {/* Botones */}
+              {!pagoAvisado ? (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => window.open(`https://link.mercadopago.com.ar/${PLATFORM_ALIAS}`, '_blank')}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition">
+                    <svg viewBox="0 0 40 40" className="w-7 h-7 fill-white"><path d="M20 0C9 0 0 9 0 20s9 20 20 20 20-9 20-20S31 0 20 0zm9.5 17.5c-.5 3-3 5.5-6 6.5l-1.5.5v3.5H19V24l-1.5-.5C14 22.5 11.5 20 11 17H9c.5 4 3.5 7 7.5 8.5V29h7v-3.5c4-1.5 7-4.5 7.5-8.5h-1.5z"/></svg>
+                    Abrir MercadoPago
+                  </button>
+                  <div className="relative flex items-center gap-3">
+                    <div className="flex-1 border-t border-gray-200" />
+                    <span className="text-xs text-gray-400 whitespace-nowrap">Una vez que transferiste</span>
+                    <div className="flex-1 border-t border-gray-200" />
+                  </div>
+                  <button
+                    disabled={loading}
+                    onClick={handleActivarPlan}
+                    className="w-full bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition">
+                    {loading ? 'Activando...' : '✅ Ya pagué — Activar mi rifa'}
+                  </button>
+                  {error && <p className="text-red-500 text-sm bg-red-50 rounded-lg p-3">{error}</p>}
+                </div>
+              ) : (
+                <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-5 text-center space-y-3">
+                  <p className="text-3xl">🚀</p>
+                  <p className="text-xl font-bold text-green-700">¡Rifa activada!</p>
+                  <p className="text-sm text-gray-600">Tu sorteo ya está publicado y listo para compartir.</p>
+                  <a href={`/rifa/${rifaCreada.slug}?nueva=1&gestionar=${rifaCreada.id}`}
+                    className="block bg-primary text-white py-3 rounded-xl font-bold hover:bg-primary-dark transition">
+                    Ver mi rifa y panel de gestión →
+                  </a>
+                </div>
+              )}
+
+              <p className="text-xs text-center text-gray-400">
+                ¿Problemas con el pago? Escribinos por WhatsApp y lo activamos manualmente.
+              </p>
+            </div>
+          )}
+
         </div>
       </div>
     </div>
