@@ -16,6 +16,8 @@ interface Props {
   tipo: 'paga' | 'comercio'
   titulo: string
   imagen_url: string | null
+  nombre_comercio: string | null
+  logo_url: string | null
 }
 
 function formatNumero(n: number, total: number): string {
@@ -23,7 +25,7 @@ function formatNumero(n: number, total: number): string {
   return String(n).padStart(3, '0')
 }
 
-export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tipo, titulo, imagen_url }: Props) {
+export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tipo, titulo, imagen_url, nombre_comercio, logo_url }: Props) {
   const [seleccionados, setSeleccionados] = useState<number[]>([])
   const [nombre, setNombre] = useState('')
   const [telefono, setTelefono] = useState('')
@@ -49,9 +51,6 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
       : 'bg-primary text-white ring-2 ring-primary shadow-md scale-105'
     return 'bg-white border border-gray-200 hover:border-primary hover:text-primary hover:scale-105 cursor-pointer'
   }
-
-  // Columnas según tamaño
-  const cols = total <= 50 ? 'grid-cols-10' : total <= 100 ? 'grid-cols-10' : 'grid-cols-10'
 
   async function handleConfirmar() {
     if (!nombre.trim()) { setError('Ingresá tu nombre'); return }
@@ -80,16 +79,23 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
       const nums = seleccionados.sort((a, b) => a - b)
       const numFormateados = nums.map(n => formatNumero(n, total)).join(', ')
       const ticketUrl = `${baseUrl}/rifa/${slug}`
+      const comercio = nombre_comercio || 'RifaLocal'
 
       const msg = encodeURIComponent(
-        `🎟 *TICKET DE RIFA*\n\n` +
-        `📋 *${titulo}*\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎟  *TICKET DE PARTICIPACIÓN*\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `🏪 *${comercio}*\n` +
+        `🎁 *${titulo}*\n\n` +
         `👤 Titular: *${nombre}*\n` +
-        `🔢 Número${nums.length > 1 ? 's' : ''}: *${numFormateados}*\n\n` +
-        `━━━━━━━━━━━━━━━━━━\n` +
-        `🎰 El sorteo se realizará con el primer número de la *Lotería Nacional nocturna* del día en que se entreguen todos los tickets.\n\n` +
-        `📲 Seguí la rifa acá:\n${ticketUrl}\n\n` +
-        `¡Mucha suerte! 🍀`
+        `🔢 Número${nums.length > 1 ? 's' : ''}: *${numFormateados}*\n` +
+        (esPaga ? `💰 Monto: *$${(nums.length * precioNumero).toLocaleString('es-AR')}*\n` : `✅ Participación: *GRATUITA*\n`) +
+        `\n━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🎰 *¿Cómo se sortea?*\n` +
+        `Cuando se entreguen todos los tickets, el ganador se determina con el *primer número de la Lotería Nacional nocturna* de ese día.\n\n` +
+        `📲 *Seguí la rifa acá:*\n${ticketUrl}\n\n` +
+        `¡Mucha suerte! 🍀\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━`
       )
 
       const telLimpio = telefono.replace(/\D/g, '')
@@ -121,7 +127,6 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
             </div>
           </div>
 
-          {/* Stats rápidos */}
           <div className="flex gap-3 mb-4 text-xs text-center">
             <div className="flex-1 bg-gray-50 rounded-lg py-2">
               <p className="font-bold text-lg text-gray-800">{pagados}</p>
@@ -137,7 +142,7 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
             </div>
           </div>
 
-          <div className={`grid ${cols} gap-1.5 mb-5`}>
+          <div className="grid grid-cols-10 gap-1.5 mb-5">
             {numeros.map(n => (
               <button
                 key={n.numero}
@@ -181,6 +186,20 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
 
       {step === 'form' && (
         <div className="space-y-4">
+          {/* Header con comercio */}
+          {(nombre_comercio || logo_url) && (
+            <div className={`flex items-center gap-3 p-3 rounded-xl ${esPaga ? 'bg-orange-50' : 'bg-primary-light'}`}>
+              {logo_url
+                ? <img src={logo_url} alt={nombre_comercio ?? ''} className="w-10 h-10 rounded-lg object-cover border" />
+                : <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold text-white ${esPaga ? 'bg-accent' : 'bg-primary'}`}>{nombre_comercio?.[0]?.toUpperCase()}</div>
+              }
+              <div>
+                <p className="font-bold text-sm">{nombre_comercio}</p>
+                <p className="text-xs text-gray-500">{titulo}</p>
+              </div>
+            </div>
+          )}
+
           <h2 className="font-bold text-lg">Tus datos de contacto</h2>
           <p className="text-sm text-gray-500">Te enviamos tu ticket por WhatsApp al instante.</p>
 
@@ -202,27 +221,44 @@ export default function GrillaNumeros({ rifaId, numeros, precioNumero, slug, tip
           </div>
 
           {/* Preview ticket */}
-          <div className={`rounded-xl p-4 border-2 ${esPaga ? 'bg-orange-50 border-orange-200' : 'bg-primary-light border-primary/20'}`}>
-            <p className="text-xs font-bold uppercase text-gray-500 mb-2">🎟 Tu ticket</p>
-            <div className="text-sm space-y-1">
-              <p><span className="text-gray-500">Rifa:</span> <strong>{titulo}</strong></p>
-              <p><span className="text-gray-500">Número{seleccionados.length > 1 ? 's' : ''}:</span>{' '}
-                {seleccionados.sort((a, b) => a - b).map(n => (
-                  <strong key={n} className={`mx-0.5 px-2 py-0.5 rounded ${esPaga ? 'bg-accent text-white' : 'bg-primary text-white'}`}>
-                    {formatNumero(n, total)}
-                  </strong>
-                ))}
-              </p>
-              {esPaga
-                ? <p><span className="text-gray-500">Total:</span> <strong className="text-accent">${montoTotal.toLocaleString('es-AR')}</strong></p>
-                : <p><strong className="text-green-600">✅ Participación gratuita</strong></p>
+          <div className={`rounded-xl border-2 overflow-hidden ${esPaga ? 'border-orange-200' : 'border-primary/20'}`}>
+            {/* Header ticket */}
+            <div className={`p-3 flex items-center gap-3 ${esPaga ? 'bg-accent' : 'bg-primary'}`}>
+              {logo_url
+                ? <img src={logo_url} alt="" className="w-10 h-10 rounded-lg object-cover border-2 border-white/40" />
+                : <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center text-lg font-bold text-white">{nombre_comercio?.[0]?.toUpperCase() ?? '🎟'}</div>
               }
+              <div className="text-white">
+                <p className="font-bold text-sm">{nombre_comercio || 'RifaLocal'}</p>
+                <p className="text-xs opacity-80">{titulo}</p>
+              </div>
+            </div>
+            {/* Body ticket */}
+            <div className={`p-4 ${esPaga ? 'bg-orange-50' : 'bg-primary-light'}`}>
+              <p className="text-xs font-bold uppercase text-gray-500 mb-2">🎟 Tu ticket</p>
+              <div className="text-sm space-y-1.5">
+                <div className="flex justify-between"><span className="text-gray-500">Titular</span><strong>{nombre || '—'}</strong></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-500">Número{seleccionados.length > 1 ? 's' : ''}</span>
+                  <div className="flex gap-1 flex-wrap justify-end">
+                    {seleccionados.sort((a, b) => a - b).map(n => (
+                      <strong key={n} className={`px-2 py-0.5 rounded text-sm ${esPaga ? 'bg-accent text-white' : 'bg-primary text-white'}`}>
+                        {formatNumero(n, total)}
+                      </strong>
+                    ))}
+                  </div>
+                </div>
+                {esPaga
+                  ? <div className="flex justify-between font-bold"><span className="text-gray-500">Total</span><span className="text-accent">${montoTotal.toLocaleString('es-AR')}</span></div>
+                  : <div className="flex justify-between font-bold"><span className="text-gray-500">Costo</span><span className="text-green-600">✅ GRATIS</span></div>
+                }
+              </div>
             </div>
           </div>
 
           <div className="bg-green-50 rounded-xl p-3 text-xs text-green-800 flex items-start gap-2">
             <span className="text-base">📲</span>
-            <p>Al confirmar te vamos a abrir WhatsApp con tu ticket de participación.</p>
+            <p>Al confirmar te abrimos WhatsApp con tu ticket de participación.</p>
           </div>
 
           {error && <p className="text-red-500 text-sm bg-red-50 rounded-lg p-3">{error}</p>}

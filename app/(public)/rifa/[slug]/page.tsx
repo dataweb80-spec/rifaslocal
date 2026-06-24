@@ -6,22 +6,22 @@ import type { Metadata } from 'next'
 
 interface Props {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ nueva?: string }>
+  searchParams: Promise<{ nueva?: string; plan?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const supabase = await createClient()
-  const { data } = await supabase.from('rifas').select('titulo, descripcion').eq('slug', slug).single()
+  const { data } = await supabase.from('rifas').select('titulo, descripcion, nombre_comercio').eq('slug', slug).single()
   return {
     title: data?.titulo ?? 'Rifa',
-    description: data?.descripcion ?? 'Participá en esta rifa',
+    description: data?.descripcion ?? `Participá en ${data?.nombre_comercio ?? 'esta rifa'}`,
   }
 }
 
 export default async function RifaPage({ params, searchParams }: Props) {
   const { slug } = await params
-  const { nueva } = await searchParams
+  const { nueva, plan } = await searchParams
   const supabase = await createClient()
 
   const { data: rifa } = await supabase
@@ -31,6 +31,21 @@ export default async function RifaPage({ params, searchParams }: Props) {
     .single()
 
   if (!rifa) notFound()
+
+  // Rifas comercio en borrador (esperando pago del plan) - mostrar pantalla de espera
+  if (rifa.estado === 'borrador') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl p-8 shadow-sm max-w-md w-full text-center">
+          <div className="text-5xl mb-4">⏳</div>
+          <h1 className="text-2xl font-bold mb-2">{rifa.titulo}</h1>
+          {rifa.nombre_comercio && <p className="text-primary font-semibold mb-4">{rifa.nombre_comercio}</p>}
+          <p className="text-gray-500 mb-6">Esta rifa está pendiente de activación. El organizador debe completar el pago del plan para que esté disponible.</p>
+          <a href="/" className="text-primary font-semibold hover:underline">← Volver al inicio</a>
+        </div>
+      </div>
+    )
+  }
 
   const { data: numeros } = await supabase
     .from('numeros_rifa')
@@ -42,13 +57,12 @@ export default async function RifaPage({ params, searchParams }: Props) {
   const reservados = numeros?.filter(n => n.estado === 'reservado').length ?? 0
   const disponibles = (rifa.cantidad_numeros) - pagados - reservados
   const progreso = Math.round((pagados / rifa.cantidad_numeros) * 100)
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3800'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://rifaslocal.vercel.app'
   const urlRifa = `${baseUrl}/rifa/${rifa.slug}`
 
   return (
     <div className="min-h-screen bg-gray-50">
 
-      {/* Nav simple */}
       <nav className="bg-white border-b px-4 py-3 flex items-center justify-between">
         <a href="/" className="flex items-center gap-2">
           <span className="text-xl">🎟</span>
@@ -59,10 +73,14 @@ export default async function RifaPage({ params, searchParams }: Props) {
         </span>
       </nav>
 
-      {/* Banner si es nueva */}
       {nueva && (
         <div className="bg-green-500 text-white text-center py-3 px-4">
           <p className="font-bold">🎉 ¡Tu rifa está activa! Compartí el link para que la gente compre números.</p>
+        </div>
+      )}
+      {plan === 'pendiente' && (
+        <div className="bg-yellow-500 text-white text-center py-3 px-4">
+          <p className="font-bold">⏳ Pago en proceso. Tu rifa se activará cuando se confirme el pago.</p>
         </div>
       )}
 
@@ -74,11 +92,25 @@ export default async function RifaPage({ params, searchParams }: Props) {
             <img src={rifa.imagen_url} alt={rifa.titulo} className="w-full h-56 object-cover" />
           )}
           {!rifa.imagen_url && (
-            <div className={`w-full h-40 flex items-center justify-center text-6xl ${rifa.tipo === 'comercio' ? 'bg-primary-light' : 'bg-orange-50'}`}>
+            <div className={`w-full h-32 flex items-center justify-center text-6xl ${rifa.tipo === 'comercio' ? 'bg-primary-light' : 'bg-orange-50'}`}>
               {rifa.tipo === 'comercio' ? '🏪' : '🎁'}
             </div>
           )}
           <div className="p-6">
+            {/* Comercio header */}
+            {rifa.nombre_comercio && (
+              <div className="flex items-center gap-3 mb-4 pb-4 border-b">
+                {rifa.logo_url
+                  ? <img src={rifa.logo_url} alt={rifa.nombre_comercio} className="w-12 h-12 rounded-xl object-cover border" />
+                  : <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold text-white ${rifa.tipo === 'paga' ? 'bg-accent' : 'bg-primary'}`}>{rifa.nombre_comercio[0].toUpperCase()}</div>
+                }
+                <div>
+                  <p className="font-bold">{rifa.nombre_comercio}</p>
+                  <p className="text-xs text-gray-500">{rifa.tipo === 'comercio' ? 'Comercio / Entidad organizadora' : 'Organizador'}</p>
+                </div>
+              </div>
+            )}
+
             <h1 className="text-2xl font-bold mb-2">{rifa.titulo}</h1>
             {rifa.descripcion && <p className="text-gray-500 mb-4">{rifa.descripcion}</p>}
 
@@ -104,10 +136,9 @@ export default async function RifaPage({ params, searchParams }: Props) {
               </div>
             </div>
 
-            {/* Barra progreso */}
             <div className="mb-2">
               <div className="flex justify-between text-sm text-gray-600 mb-1">
-                <span>{pagados} pagados</span>
+                <span>{pagados} vendidos</span>
                 <span className="font-semibold">{progreso}% completado</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-3">
@@ -115,7 +146,6 @@ export default async function RifaPage({ params, searchParams }: Props) {
               </div>
             </div>
 
-            {/* Sorteo */}
             <div className="mt-4 bg-blue-50 rounded-xl px-4 py-3 text-sm text-blue-800 flex items-center gap-2">
               <span className="text-xl">🎰</span>
               <div>
@@ -126,10 +156,8 @@ export default async function RifaPage({ params, searchParams }: Props) {
           </div>
         </div>
 
-        {/* Compartir */}
         <BotonCompartir url={urlRifa} titulo={rifa.titulo} slug={rifa.slug} />
 
-        {/* Ganador */}
         {rifa.estado === 'finalizada' && rifa.ganador_numero && (
           <div className="bg-green-500 text-white rounded-2xl p-6 text-center shadow-lg">
             <p className="text-4xl mb-2">🏆</p>
@@ -142,8 +170,7 @@ export default async function RifaPage({ params, searchParams }: Props) {
           </div>
         )}
 
-        {/* Grilla de números */}
-        {(rifa.estado === 'activa') && (
+        {rifa.estado === 'activa' && (
           <GrillaNumeros
             rifaId={rifa.id}
             numeros={numeros ?? []}
@@ -152,6 +179,8 @@ export default async function RifaPage({ params, searchParams }: Props) {
             tipo={rifa.tipo}
             titulo={rifa.titulo}
             imagen_url={rifa.imagen_url}
+            nombre_comercio={rifa.nombre_comercio}
+            logo_url={rifa.logo_url}
           />
         )}
 
@@ -159,22 +188,9 @@ export default async function RifaPage({ params, searchParams }: Props) {
           <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-8 text-center">
             <p className="text-3xl mb-2">⏳</p>
             <p className="text-xl font-bold text-yellow-800">¡Todos los números vendidos!</p>
-            <p className="text-gray-600 mt-2">Esperando el número de la Lotería Nacional nocturna de hoy para determinar el ganador.</p>
+            <p className="text-gray-600 mt-2">Esperando el número de la Lotería Nacional nocturna para determinar el ganador.</p>
           </div>
         )}
-
-        {/* Instrucciones */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h3 className="font-bold mb-3">¿Cómo funciona?</h3>
-          <div className="space-y-3 text-sm text-gray-600">
-            <div className="flex gap-3"><span>1️⃣</span><span>Elegís tu número de la grilla</span></div>
-            <div className="flex gap-3"><span>2️⃣</span><span>Ingresás tu nombre y número de WhatsApp</span></div>
-            <div className="flex gap-3"><span>3️⃣</span><span>Pagás con MercadoPago (tarjeta, transferencia o saldo)</span></div>
-            <div className="flex gap-3"><span>4️⃣</span><span>Recibís confirmación por WhatsApp con tu número</span></div>
-            <div className="flex gap-3"><span>5️⃣</span><span>Cuando se llene, el sorteo se hace con el primer número de Lotería Nacional nocturna</span></div>
-            <div className="flex gap-3"><span>6️⃣</span><span>Si ganás, te contactamos por WhatsApp dentro de las 24hs</span></div>
-          </div>
-        </div>
 
       </div>
     </div>
