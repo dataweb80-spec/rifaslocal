@@ -181,6 +181,8 @@ export default async function RifaPage({ params, searchParams }: Props) {
             imagen_url={rifa.imagen_url}
             nombre_comercio={rifa.nombre_comercio}
             logo_url={rifa.logo_url}
+            mp_alias={rifa.mp_alias ?? null}
+            tel_organizador={rifa.tel_organizador ?? null}
           />
         )}
 

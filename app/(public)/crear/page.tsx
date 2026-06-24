@@ -29,6 +29,8 @@ function CrearRifaForm() {
     imagen_url: '',
     nombre_comercio: '',
     logo_url: '',
+    mp_alias: '',
+    tel_organizador: '',
     precio_numero: '',
     cantidad_numeros: '100',
     plan_numeros: 100,
@@ -50,8 +52,8 @@ function CrearRifaForm() {
     setError('')
     try {
       const body = tipo === 'paga'
-        ? { tipo: 'paga', titulo: form.titulo, descripcion: form.descripcion, imagen_url: form.imagen_url, nombre_comercio: form.nombre_comercio, logo_url: form.logo_url, precio_numero: +form.precio_numero, cantidad_numeros: +form.cantidad_numeros, terminos_ok: true }
-        : { tipo: 'comercio', titulo: form.titulo, descripcion: form.descripcion, imagen_url: form.imagen_url, nombre_comercio: form.nombre_comercio, logo_url: form.logo_url, precio_numero: 0, cantidad_numeros: form.plan_numeros, precio_plan: form.plan_precio, terminos_ok: true }
+        ? { tipo: 'paga', titulo: form.titulo, descripcion: form.descripcion, imagen_url: form.imagen_url, nombre_comercio: form.nombre_comercio, logo_url: form.logo_url, mp_alias: form.mp_alias, tel_organizador: form.tel_organizador, precio_numero: +form.precio_numero, cantidad_numeros: +form.cantidad_numeros, terminos_ok: true }
+        : { tipo: 'comercio', titulo: form.titulo, descripcion: form.descripcion, imagen_url: form.imagen_url, nombre_comercio: form.nombre_comercio, logo_url: form.logo_url, tel_organizador: form.tel_organizador, precio_numero: 0, cantidad_numeros: form.plan_numeros, precio_plan: form.plan_precio, terminos_ok: true }
 
       const res = await fetch('/api/rifas/crear', {
         method: 'POST',
@@ -148,16 +150,18 @@ function CrearRifaForm() {
             </div>
           )}
 
-          {/* PASO 2 PAGA: Números y precio */}
+          {/* PASO 2 PAGA: Precio + Alias MP */}
           {step === 2 && tipo === 'paga' && (
             <div className="space-y-4">
-              <h2 className="font-bold text-lg">Precio y cantidad de números</h2>
+              <h2 className="font-bold text-lg">Precio y datos de cobro</h2>
+
               <div>
                 <label className="block text-sm font-medium mb-1">Precio por número (ARS) *</label>
                 <input type="number" value={form.precio_numero} onChange={e => set('precio_numero', e.target.value)}
                   placeholder="ej: 5000" min="1"
                   className="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary text-lg font-semibold" />
               </div>
+
               <div>
                 <label className="block text-sm font-medium mb-2">Cantidad de números</label>
                 <div className="grid grid-cols-4 gap-2">
@@ -169,16 +173,45 @@ function CrearRifaForm() {
                   ))}
                 </div>
               </div>
+
               {form.precio_numero && (
                 <div className="bg-gray-50 rounded-xl p-4 text-sm space-y-1">
                   <div className="flex justify-between"><span className="text-gray-500">Total a recaudar</span><span className="font-bold">${(+form.precio_numero * +form.cantidad_numeros).toLocaleString('es-AR')}</span></div>
-                  <div className="flex justify-between text-gray-400"><span>Comisión plataforma (10%)</span><span>−${(+form.precio_numero * +form.cantidad_numeros * 0.10).toLocaleString('es-AR')}</span></div>
+                  <div className="flex justify-between text-gray-400"><span>Comisión RifaLocal (10%)</span><span>−${(+form.precio_numero * +form.cantidad_numeros * 0.10).toLocaleString('es-AR')}</span></div>
                   <div className="flex justify-between font-bold text-accent border-t pt-2 mt-1"><span>Recibís vos</span><span>${gananciaOrganizador.toLocaleString('es-AR')}</span></div>
                 </div>
               )}
+
+              <div className="border-t pt-4">
+                <div className="bg-blue-50 rounded-xl p-4 text-sm text-blue-800 mb-4">
+                  <p className="font-semibold mb-1">💳 ¿Cómo recibís el pago?</p>
+                  <p>Los compradores te pagan directamente por MercadoPago usando tu alias. Ingresá tu alias de MP para que aparezca en la pantalla de pago.</p>
+                </div>
+
+                <label className="block text-sm font-medium mb-1">Tu alias de MercadoPago *</label>
+                <div className="flex items-center border rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary">
+                  <span className="px-3 py-2.5 bg-gray-50 text-gray-500 text-sm border-r">alias:</span>
+                  <input type="text" value={form.mp_alias} onChange={e => set('mp_alias', e.target.value.toLowerCase().replace(/\s/g, ''))}
+                    placeholder="tualias"
+                    className="flex-1 px-3 py-2.5 focus:outline-none font-semibold" />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Encontralo en MercadoPago → Tu perfil → Alias</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tu WhatsApp (para recibir avisos de compra) *</label>
+                <div className="flex gap-2">
+                  <span className="border rounded-lg px-3 py-2.5 bg-gray-50 text-gray-500 text-sm whitespace-nowrap">🇦🇷 +54</span>
+                  <input type="tel" value={form.tel_organizador} onChange={e => set('tel_organizador', e.target.value)}
+                    placeholder="11 1234-5678"
+                    className="flex-1 border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Cuando alguien compre un número te llegará un WhatsApp con los datos del comprador.</p>
+              </div>
+
               <div className="flex gap-2">
                 <button onClick={() => setStep(1)} className="flex-1 border py-3 rounded-xl font-semibold hover:border-accent">← Atrás</button>
-                <button disabled={!form.precio_numero} onClick={() => setStep(3)}
+                <button disabled={!form.precio_numero || !form.mp_alias.trim() || !form.tel_organizador.trim()} onClick={() => setStep(3)}
                   className="flex-1 bg-accent text-white py-3 rounded-xl font-semibold disabled:opacity-50 hover:opacity-90">Siguiente →</button>
               </div>
             </div>
@@ -201,9 +234,20 @@ function CrearRifaForm() {
                   </button>
                 ))}
               </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tu WhatsApp (para recibir avisos) *</label>
+                <div className="flex gap-2">
+                  <span className="border rounded-lg px-3 py-2.5 bg-gray-50 text-gray-500 text-sm whitespace-nowrap">🇦🇷 +54</span>
+                  <input type="tel" value={form.tel_organizador} onChange={e => set('tel_organizador', e.target.value)}
+                    placeholder="11 1234-5678"
+                    className="flex-1 border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary" />
+                </div>
+              </div>
+
               <div className="flex gap-2">
                 <button onClick={() => setStep(1)} className="flex-1 border py-3 rounded-xl font-semibold hover:border-primary">← Atrás</button>
-                <button onClick={() => setStep(3)} className="flex-1 bg-primary text-white py-3 rounded-xl font-semibold hover:bg-primary-dark">Siguiente →</button>
+                <button disabled={!form.tel_organizador.trim()} onClick={() => setStep(3)} className="flex-1 bg-primary text-white py-3 rounded-xl font-semibold disabled:opacity-50 hover:bg-primary-dark">Siguiente →</button>
               </div>
             </div>
           )}
@@ -228,6 +272,7 @@ function CrearRifaForm() {
                   <>
                     <div className="flex justify-between"><span className="text-gray-500">Precio / número</span><span className="font-medium">${(+form.precio_numero).toLocaleString('es-AR')}</span></div>
                     <div className="flex justify-between"><span className="text-gray-500">Cantidad</span><span className="font-medium">{form.cantidad_numeros} números</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">Alias MP</span><span className="font-medium text-blue-600">{form.mp_alias}</span></div>
                     <div className="flex justify-between font-bold text-accent border-t pt-2"><span>Recibís vos</span><span>${gananciaOrganizador.toLocaleString('es-AR')}</span></div>
                   </>
                 ) : (
